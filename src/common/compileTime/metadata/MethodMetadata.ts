@@ -14,7 +14,14 @@ import {
   MethodReturnTypeContext,
   TypeSpecifierContext,
   TerminalNode,
-  type ClassBodyMethodDefinitionContext
+  type ClassBodyMethodDefinitionContext,
+  MethodBodyContext,
+  ExternalMethodDefinitionContext,
+  DataAnnotationContext,
+  DllImportStatementContext,
+  ImportedDllNameContext,
+  StringContext,
+  BaseConstructorCallContext,
 } from '../parser'
 import {
   iterateParseTreeNodeChildren,
@@ -24,6 +31,11 @@ import {
   getDataFromTerminalNodeChild
 } from '../util/ParseTreeUtil'
 import { ClassMetadata } from './ClassMetadata'
+import { CILMethodBody, } from '../../cil/CILMethodBody'
+import { MethodBodyCompiler } from '../MethodBodyCompiler'
+import { removeFirstCharacter, removeLastCharacter } from '../../../util/StringUtil'
+import { CSRuleError } from '../../CSInterpreterError'
+import { CONSTRUCTOR_METHOD_NAME } from '../../Constants'
 
 class MethodParameter {
   readonly type: TypeSpecifier
@@ -44,7 +56,7 @@ class MethodParameter {
 }
 
 class MethodSignature {
-  readonly name: string
+  name: string
   readonly parameterList: MethodParameter[]
 
   constructor (name: string, parameterList: MethodParameter[]) {
@@ -73,6 +85,16 @@ class MethodSignature {
     const parameterCount = this.parameterList.length
     for (let i = 0; i < parameterCount; i++) {
       result += this.parameterList[i].typeSpecifierToString() + (i !== parameterCount - 1 ? ',' : '')
+    }
+    result += ')'
+    return result
+  }
+
+  toString_ParameterTypeWithoutNamespacePath() : string {
+    let result = this.name + '('
+    const parameterCount = this.parameterList.length
+    for (let i = 0; i < parameterCount; i++) {
+      result += this.parameterList[i].type.matchedClass?.name + (i !== parameterCount - 1 ? ', ' : '')
     }
     result += ')'
     return result
@@ -120,6 +142,11 @@ abstract class MethodMetadata extends Scope { // any: just a dummy here now, wil
   returnType: MethodReturnType | null
 
   /**
+   * Is the method a static method?
+   */
+  isStatic: boolean
+
+  /**
    * The constructor for the `MethodMetadata` class.
    *
    * You need to use method `fromParseTreeMethodMetadata` to fill in the data from a parse tree node.
@@ -144,7 +171,11 @@ abstract class MethodMetadata extends Scope { // any: just a dummy here now, wil
 
   private fromParseTree_ModifierList (parseTreeNode: MethodDefinitionContext): void {
     const callback = (node: MethodModifierContext): boolean => {
-      this.modifiers[this.modifiers.length] = getDataFromTerminalNodeChild(node)
+      const modifier = getDataFromTerminalNodeChild(node)
+      this.modifiers[this.modifiers.length] = modifier;
+      if(modifier === 'static') {
+        this.isStatic = true;
+      }
       return true
     }
     const methodModifierListNode = getChildNodeByTypeAssertExistsChild(parseTreeNode, MethodModifierListContext)
@@ -174,15 +205,29 @@ abstract class MethodMetadata extends Scope { // any: just a dummy here now, wil
   }
 
   private fromParseTree_ReturnType (parseTreeNode: MethodDefinitionContext): void {
-    const returnTypeNode = getChildNodeByTypeAssertExistsChild(parseTreeNode, MethodReturnTypeContext)
-    const returnTypeSpecifierNode = getChildNodeByType(returnTypeNode, TypeSpecifierContext)
-    if (returnTypeSpecifierNode === null) { // If there is no TypeSpecifierContext under MethodReturnTypeContext, then there should be a TerminalNodeImpl under MethodReturnTypeContext which holds "void".
-      assertTrue(getDataFromTerminalNodeChild(returnTypeNode) === 'void')
-      this.returnType = new MethodReturnTypeVoid()
-    } else {
-      this.returnType = new MethodReturnType()
-      this.returnType.fromParseTree(returnTypeSpecifierNode as TypeSpecifierContext, assertNonNullOrUndefined(this.parent))
+    const returnTypeNode = getChildNodeByType(parseTreeNode, MethodReturnTypeContext)
+    if(returnTypeNode !== null) {
+      const returnTypeSpecifierNode = getChildNodeByType(returnTypeNode, TypeSpecifierContext)
+      if (returnTypeSpecifierNode === null) { // If there is no TypeSpecifierContext under MethodReturnTypeContext, then there should be a TerminalNodeImpl under MethodReturnTypeContext which holds "void".
+        assertTrue(getDataFromTerminalNodeChild(returnTypeNode) === 'void')
+        this.returnType = new MethodReturnTypeVoid()
+      } else {
+        this.returnType = new MethodReturnType()
+        this.returnType.fromParseTree(returnTypeSpecifierNode as TypeSpecifierContext, assertNonNullOrUndefined(this.parent))
+      }
     }
+    else {
+      assertTrue(this.parent instanceof ClassMetadata);
+      const className = (this.parent as ClassMetadata).name;
+      const methodSignature = assertNonNullOrUndefined(this.methodSignature) as MethodSignature;
+      if(methodSignature.name !== className) {
+        throw new CSRuleError("1520", [], this.codePieceIndex);
+      }
+      // Treat this method as a constructor
+      methodSignature.name = CONSTRUCTOR_METHOD_NAME;
+      this.returnType = null;
+    }
+    
   }
 
   /**
@@ -202,31 +247,69 @@ abstract class MethodMetadata extends Scope { // any: just a dummy here now, wil
 }
 
 /**
- * An class that represents a non-abstract method in a class.
- *
- * It has a method body and it can be static.
+ * An class that represents a method with method body (implementation) in a class.
  */
-class ClassBodyMethodMetadata extends MethodMetadata {
-  methodBody: any // todo
-  isStatic: boolean
-
+class ImplementedMethodMetadata extends MethodMetadata {
+  methodBody: CILMethodBody
+  compiler : MethodBodyCompiler | null;
   /**
    * Fill in the data from a parse tree node that has a type of `ClassBodyMethodDefinitionContext`.
    *
-   * You can NOT call this method for more than one time on the same `ClassBodyMethodMetadata` object.
+   * You can NOT call this method for more than one time on the same `ImplementedMethodMetadata` object.
    */
-  fromParseTree (node: ClassBodyMethodDefinitionContext): void {
+  fromParseTree (node : ClassBodyMethodDefinitionContext): void {
     this.fromParseTreeMethodMetadata(getChildNodeByTypeAssertExistsChild(node, MethodDefinitionContext) as MethodDefinitionContext)
-    const modifierCount = this.modifiers.length
-    for (let i = 0; i < modifierCount; i = i + 1) {
-      if (this.modifiers[i] === 'static') {
-        this.isStatic = true
-        break
-      }
+    const methodBodyNode : MethodBodyContext = getChildNodeByTypeAssertExistsChild(node, MethodBodyContext) as MethodBodyContext;
+    const baseConstructorCallNode = getChildNodeByType(node, BaseConstructorCallContext) as BaseConstructorCallContext | null;
+    if(baseConstructorCallNode !== null && this.methodSignature?.name !== CONSTRUCTOR_METHOD_NAME) {
+      throw new CSRuleError("-1", ["Calling base constructor in a non-constructor method"], this.codePieceIndex);
     }
-    // todo: method body
+    this.compiler = new MethodBodyCompiler(methodBodyNode, assertNonNullOrUndefined(this.methodSignature), this.isStatic, this, baseConstructorCallNode);
     // this.addNameBinding(InternalBindingType.Method, this.methodSignature.toString(), this);
+  }
+
+  compileMethodBody() {
+    this.methodBody = assertNonNullOrUndefined(this.compiler).compileMethodBody();
+    this.compiler = null;
+  }
+
+  
+}
+
+class ExternalMethodMetadata extends ImplementedMethodMetadata {
+  libraryName : string;
+
+  fromParseTreeExternalMethod(node : ExternalMethodDefinitionContext) {
+    this.fromParseTreeMethodMetadata(getChildNodeByTypeAssertExistsChild(node, MethodDefinitionContext) as MethodDefinitionContext)
+    this.libraryName = 
+    getDataFromTerminalNodeChild(
+      getChildNodeByTypeAssertExistsChild(
+      getChildNodeByTypeAssertExistsChild(
+      getChildNodeByTypeAssertExistsChild(
+        getChildNodeByTypeAssertExistsChild(
+        node,
+        DataAnnotationContext),
+        DllImportStatementContext),
+        ImportedDllNameContext),
+        StringContext));
+      this.libraryName = removeLastCharacter(removeFirstCharacter(this.libraryName));
+  }
+
+  /**
+   * This function should not be called.
+   * @param node
+   */
+  fromParseTree (node : ClassBodyMethodDefinitionContext) {
+    assertNotReachHere();
+  }
+
+  /**
+   * A dummy function, since the external method are implemented "externally", so it can't be compiled like a normally implemented method.
+   * @returns 
+   */
+  compileMethodBody() {
+    return;
   }
 }
 
-export { MethodMetadata, ClassBodyMethodMetadata }
+export { MethodMetadata, ImplementedMethodMetadata, ExternalMethodMetadata, MethodSignature, MethodParameter, MethodReturnTypeVoid }

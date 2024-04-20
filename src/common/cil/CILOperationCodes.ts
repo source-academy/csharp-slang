@@ -3,6 +3,10 @@
  */
 enum CILOperationCodes {
   add = 'add',
+  sub = 'sub',
+  mul = 'mul',
+  div = 'div',
+  rem = 'rem',
   ldc_i4_0 = 'ldc.i4.0',
   ldc_i4_1 = 'ldc.i4.1',
   ldc_i4_2 = 'ldc.i4.2',
@@ -14,6 +18,8 @@ enum CILOperationCodes {
   ldc_i4_8 = 'ldc.i4.8',
   ldc_i4_s = 'ldc.i4.s',
   ldc_i4 = 'ldc.i4',
+  ldc_i8 = 'ldc.i8',
+  ldc_r8 = 'ldc.r8',
   ldloc_0 = 'ldloc.0',
   ldloc_1 = 'ldloc.1',
   ldloc_2 = 'ldloc.2',
@@ -24,11 +30,19 @@ enum CILOperationCodes {
   stloc_2 = 'stloc.2',
   stloc_3 = 'stloc.3',
   stloc_s = 'stloc.s',
+  stloc = 'stloc',
+  starg = 'starg',
+  ldnull = 'ldnull',
   ldstr = 'ldstr',
   newobj = 'newobj',
   call = 'call',
+  callvirt = 'callvirt',
   ret = 'ret',
   nop = 'nop',
+  ldarg = 'ldarg',
+  ldloc = 'ldloc',
+  ldfld = 'ldfld',
+  stfld = 'stfld',
 }
 
 type CILOperationCodeArgument = string

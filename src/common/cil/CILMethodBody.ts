@@ -11,6 +11,8 @@ import { CILOperationCodes } from './CILOperationCodes'
 const LOCALS_INIT_HEADER = '.locals init ('
 const LOCALS_INIT_END = ')'
 
+export const INTERNAL_PARAMETER_NAME_FOR_THIS_REFERENCE = "this"
+
 type CILTypePath = string
 
 /**
@@ -30,7 +32,7 @@ class CILMethodBody {
   /**
    * The CIL instructions in this method body.
    */
-  readonly instructionList: Record<CILInstructionAddress, CILInstruction>
+  readonly instructionList: CILInstruction[]
   /**
    * The information for the locals that will be created (as `RuntimeLocal`) when calling this method body.
    */
@@ -38,7 +40,7 @@ class CILMethodBody {
   private initialized: boolean
   private cumulativeInstructionAddress = -1
   constructor () {
-    this.instructionList = {}
+    this.instructionList = []
     this.locals = []
     this.initialized = false
   }
@@ -176,6 +178,15 @@ class CILMethodBody {
       }
     }
     return { instruction: null, address: this.getMaximumAddress() + 1 }
+  }
+
+  addInstruction (address : CILInstructionAddress, operationCode : CILOperationCodes, instructionArguments : string[]) : void {
+    assertTrue(this.isInitialized());
+    assertTrue(this.instructionList[address] === undefined);
+    this.instructionList[address] = new CILInstruction(operationCode, instructionArguments);
+    if(address > this.cumulativeInstructionAddress) {
+      this.cumulativeInstructionAddress = address;
+    }
   }
 }
 

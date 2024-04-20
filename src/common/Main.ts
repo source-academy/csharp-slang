@@ -1,6 +1,7 @@
 import { type CSharpContext, createNewContext } from './CSharpContext'
 import { type CSharpProgram } from './compileTime/CSharpProgram'
 import { assertNonNullOrUndefined } from '../util/Assertion'
+import { type RuntimeContext } from './runtime/RuntimeContext'
 
 let currentContext: CSharpContext
 
@@ -37,7 +38,7 @@ export function compileAndRun (): void {
 }
 
 /**
- * Add one code piece with unique code piece name and content (code) into the evaluator.
+ * Add code pieces with unique code piece names and contents (code) into the evaluator.
  *
  * @param arr An array of code pieces. It should be an array of array in this format: [ ["CodePieceName1.cs", "//code"], ["CodePieceName2.cs", "//code"], ... ]
  */
@@ -57,4 +58,14 @@ export function addUserCSharpCodePieces (arr: string[][]): void {
 export function getCurrentProgram (): CSharpProgram {
   assertNonNullOrUndefined(currentContext)
   return currentContext.program
+}
+
+export function getCurrentRuntimeContext (): RuntimeContext {
+  assertNonNullOrUndefined(currentContext)
+  return currentContext.runtimeContext
+}
+
+export function getStandardOutput (): string {
+  assertNonNullOrUndefined(currentContext)
+  return currentContext.getStandardOutput()
 }

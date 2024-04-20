@@ -4,7 +4,7 @@ const TEST_CASE_PATH = "./TestCases"
 
 const testcases = [];
 
-const numberOfTestCases = 11;
+const numberOfTestCases = 17;
 
 function loadTestCases() {
 	const testCasePartialPath = "../../" + TestConstantsModule.TEST_CASES_DIR_RELATED_TO_SRC + "/compiler_testcase_";

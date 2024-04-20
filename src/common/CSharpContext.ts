@@ -65,7 +65,11 @@ export class CSharpContext {
   }
 
   private run (): void {
-    // todo
+    this.runtimeContext.run()
+  }
+
+  getStandardOutput (): string {
+    return this.runtimeContext.getStandardOutput()
   }
 }
 

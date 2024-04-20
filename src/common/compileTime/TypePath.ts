@@ -117,10 +117,14 @@ class TypePath {
     this.namespacePath.forEach((str, index) => { result += str + (index === len - 1 ? '' : '.') })
     return result
   }
+
+  fullPathToString (): string {
+    return this.getNamespacePathString() + "." + this.typeName
+  }
 }
 
 // https://learn.microsoft.com/en-us/dotnet/api/system.type.isprimitive?view=net-7.0
-function primitiveTypeToInternalTypeName (primitiveType: string): string {
+function primitiveTypeToInternalTypeName (primitiveType: string): PrimitiveClassNames {
   switch (primitiveType) {
     case 'bool':
       return PrimitiveClassNames.Boolean
@@ -154,7 +158,7 @@ function primitiveTypeToInternalTypeName (primitiveType: string): string {
       return PrimitiveClassNames.Object
   }
   assertNotReachHere()
-  return 'ERROR_TYPE' // Just for passing tsc
+  return '' as any; // Just for passing tsc
 }
 
-export { TypePath }
+export { TypePath, primitiveTypeToInternalTypeName }

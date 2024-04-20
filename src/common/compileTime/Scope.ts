@@ -37,7 +37,7 @@ abstract class Scope {
     this.codePieceIndex = codePieceIndex
   }
 
-  private getBindingByNameLocally (name: string): NameBinding | null {
+  public getBindingByNameLocally (name: string): NameBinding | null {
     const result = this.nameBindings[name]
     if (result === undefined) {
       return null
