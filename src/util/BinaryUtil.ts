@@ -23,7 +23,7 @@ function bytesToInt32LittleEndian (fourBytesArray: Uint8Array): number {
  * @returns The byte array of length 4.
  */
 function int32ToBytesLittleEndian (int32Number: number): Uint8Array {
-  assertTrue(Number.isInteger(int32Number))
+  assertTrue(Number.isSafeInteger(int32Number))
   assertTrue(int32Number >= INT32_MIN_VALUE && int32Number <= INT32_MAX_VALUE)
   const result = new Uint8Array(4)
   const mask = 0b00000000000000000000000011111111

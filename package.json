@@ -4,9 +4,9 @@
   "description": "C# Interpreter",
   "main": "build/index",
   "scripts": {
-    "build": "tsc",
+    "build_src": "tsc",
     "test": "jest --verbose --silent",
-    "docs": "typedoc src/**/*.ts --out ./build/docs --exclude src/**/*generated*/*",
+    "docs": "typedoc --out ./build/docs --exclude src/**/*generated*/*",
     "lint": "eslint src/**/*.ts"
   },
   "author": "Wang Zihan",

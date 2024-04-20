@@ -3,9 +3,9 @@ import { assertNonNullOrUndefined, assertNotReachHere, assertTrue } from '../../
 import { MetadataStorage } from './metadata/MetadataStorage'
 import { ClassMetadata } from './metadata/ClassMetadata'
 import { NamespaceMetadata } from './metadata/NamespaceMetadata'
-import { type TypeSpecifier } from './TypeSpecifier'
+import { TypeSpecifier } from './TypeSpecifier'
 import { TypePath } from './TypePath'
-import { OBJECT_CLASS_PATH_AND_NAME } from '../Constants'
+import { OBJECT_CLASS_PATH_AND_NAME, PrimitiveClassNames, SYSTEM_NAMESPACE_PATH } from '../Constants'
 import { CSRuleError, DuplicatedCodePieceNameError, NotSupportedError } from '../CSInterpreterError'
 import { InheritanceTree } from './InheritanceTree'
 import { type Scope } from './Scope'
@@ -31,6 +31,11 @@ class CSharpProgram {
   */
   readonly metadata: MetadataStorage
 
+  private cachedFullPathStringToClassMetadataMapping : Record<string, ClassMetadata>;
+
+  readonly classMetadataIndexesToPrimitiveClassNamesMapping : Record<number, PrimitiveClassNames>;
+  readonly primitiveClassNamesToClassMetadataIndexesMapping : Record<PrimitiveClassNames, number>;
+  
   constructor () {
     this.codePieces = []
     this.compileStage = CompileStage.AddingCodePieces
@@ -38,6 +43,9 @@ class CSharpProgram {
     this.allClasses = []
     this.metadata = new MetadataStorage()
     this.currentCodePieceIndex = -1
+    this.cachedFullPathStringToClassMetadataMapping = {}
+    this.classMetadataIndexesToPrimitiveClassNamesMapping = {}
+    this.primitiveClassNamesToClassMetadataIndexesMapping = {} as any
   }
 
   /**
@@ -72,6 +80,10 @@ class CSharpProgram {
     this.compile_generateInheritanceTree()
     this.compileStage = CompileStage.ProcessClassInheritanceInfomation
     this.compile_processClassInheritanceInformation()
+    this.compileStage = CompileStage.CompileCIL
+    this.compile_CIL()
+    this.compileStage = CompileStage.FinishCompile
+    this.finishCompile()
     this.compileStage = CompileStage.Complete
   }
 
@@ -84,8 +96,19 @@ class CSharpProgram {
    * @returns The `ClassMetadata` with the path specified in `typePath`.
    */
   getClassMetadataByFullPath (typePath: TypePath, relatedCodePieceIndex: number): ClassMetadata {
-    assertTrue(this.compileStage === CompileStage.AddingCodePieces || this.compileStage === CompileStage.MatchTypeSpecifiers)
+    assertTrue(this.compileStage === CompileStage.AddingCodePieces || this.compileStage === CompileStage.MatchTypeSpecifiers || this.compileStage === CompileStage.CompileCIL || this.compileStage === CompileStage.FinishCompile)
     return this.metadata.getClassMetadataByAbsolutePath(typePath, relatedCodePieceIndex)
+  }
+
+  getClassMetadataByFullPathString_Cached(typePathStr: string, relatedCodePieceIndex: number) : ClassMetadata {
+    assertTrue(this.compileStage === CompileStage.CompileCIL || this.compileStage === CompileStage.FinishCompile)
+    if(this.cachedFullPathStringToClassMetadataMapping[typePathStr] !== undefined) {
+      log("[getClassMetadataByFullPathString_Cached] Cache hit for " + typePathStr);
+      return this.cachedFullPathStringToClassMetadataMapping[typePathStr];
+    }
+    const classMetadata = this.getClassMetadataByFullPath(new TypePath(typePathStr), relatedCodePieceIndex);
+    this.cachedFullPathStringToClassMetadataMapping[typePathStr] = classMetadata;
+    return classMetadata;
   }
 
   /**
@@ -115,7 +138,7 @@ class CSharpProgram {
    * @param typeSpecifier The `TypeSpecifier` to be added into the array.
    */
   addTypeSpecifier (typeSpecifier: TypeSpecifier): void {
-    assertTrue(this.compileStage === CompileStage.AddingCodePieces)
+    assertTrue(this.compileStage === CompileStage.AddingCodePieces || this.compileStage === CompileStage.CompileCIL)
     this.allTypeSpecifiers[this.allTypeSpecifiers.length] = typeSpecifier
   }
 
@@ -212,7 +235,7 @@ class CSharpProgram {
   private compile_processClassInheritanceInformation (): void {
     assertTrue(this.compileStage === CompileStage.ProcessClassInheritanceInfomation)
     this.compile_appendBaseClassFieldsToSubclasses()
-    this.compile_generateVirtualMethodTable()
+    this.compile_generateMethodTable()
   }
 
   private compile_appendBaseClassFieldsToSubclasses (): void {
@@ -252,6 +275,7 @@ class CSharpProgram {
     for (let i = 0; i < currentClassFieldCount; i++) {
       classMetadata.fields[i].fieldOffset += baseClassObjectFieldsSize
     }
+    classMetadata.sizeOfObjectFields += baseClassObjectFieldsSize;
     // Is it really needed to use a copied FieldMetadata to append the fields from the base classes to the subclass?
     // Or just can directly append the 'fields' array from the ClassMetadata of the direct base class to the 'fields' array from the ClassMetadata of the subclass (without creating any new 'FieldMetadata')?
     const baseClassFieldCount = baseClassMetadata.fields.length
@@ -265,8 +289,14 @@ class CSharpProgram {
     classMetadata.baseClassFieldsAppended = true
   }
 
-  private compile_generateVirtualMethodTable (): void {
-    // todo
+  private compile_generateMethodTable (): void {
+    assertTrue(this.compileStage === CompileStage.ProcessClassInheritanceInfomation);
+    
+    const classCount = this.allClasses.length
+    for (let i = 0; i < classCount; i++) {
+      const classMetadata = this.allClasses[i]
+      classMetadata.generateMethodTable();
+    }
   }
 
   /**
@@ -349,6 +379,32 @@ class CSharpProgram {
       }
     }
   }
+
+  private compile_CIL() : void {
+    assertTrue(this.compileStage === CompileStage.CompileCIL)
+    const len = this.allClasses.length
+    for (let i = 0; i < len; i++) {
+      const classMetadata = this.allClasses[i]
+      classMetadata.compileCIL()
+    }
+  }
+
+  private finishCompile() : void {
+    assertTrue(this.compileStage === CompileStage.FinishCompile);
+    for(const primitiveClassNameString in PrimitiveClassNames){
+      const classMetadataIndex = this.getClassMetadataByFullPathString_Cached(SYSTEM_NAMESPACE_PATH + "." + primitiveClassNameString, -1).classMetadataIndex;
+      const primitiveClassName = PrimitiveClassNames[primitiveClassNameString as keyof typeof PrimitiveClassNames];
+      this.classMetadataIndexesToPrimitiveClassNamesMapping[classMetadataIndex] = primitiveClassName
+      this.primitiveClassNamesToClassMetadataIndexesMapping[primitiveClassName] = classMetadataIndex;
+    }
+    
+  }
+
+  isPrimitiveType(classMetadataIndex : number) : boolean {
+    assertTrue(this.compileStage === CompileStage.Complete);
+    return this.classMetadataIndexesToPrimitiveClassNamesMapping[classMetadataIndex] !== undefined;
+  }
+  
 }
 
 enum CompileStage {
@@ -357,6 +413,8 @@ enum CompileStage {
   PostProcessClassMetadata,
   GenerateInheritanceTree,
   ProcessClassInheritanceInfomation,
+  CompileCIL,
+  FinishCompile,
   Complete,
 }
 

@@ -2,7 +2,7 @@ import { RUNTIME_MEMORY_HEAP_INITIAL_SIZE_IN_BYTES } from '../../Constants'
 import { assertNonNullOrUndefined, assertTrue, assertNotReachHere } from '../../../util/Assertion'
 import { RuntimeCILError, OutOfHeapMemoryError } from '../../CSInterpreterError'
 import { formatString } from '../../../util/StringUtil'
-import { logWarn } from '../../../util/Logger'
+import { logVerbose, logWarn } from '../../../util/Logger'
 
 /**
  * The special address that represents NULL.
@@ -37,7 +37,6 @@ class MemoryHeap {
  * @returns The start address for the allocated memory region, can be used when calling `free(startAddress)`.
  */
   malloc (size: size_t): MemoryHeapAddress {
-    // log("[MemoryHeap] Allocating " + size + " bytes");
     assertTrue(size >= 0)
     if (size === 0) {
       logWarn('[MemoryHeap.malloc] Unable to allocate memory: Allocation size is zero.')
@@ -62,6 +61,7 @@ class MemoryHeap {
       newFreeNode.previousNode = node
     }
     node.allocated = true
+    logVerbose("[MemoryHeap] Allocated " + size + " bytes at address " + node.startAddress);
     return node.startAddress
   }
 
@@ -71,7 +71,7 @@ class MemoryHeap {
  * @param startAddress The start address of an allocated memory region.
  */
   free (startAddress: MemoryHeapAddress): void {
-    // log("[MemoryHeap] Freeing allocated memory region at start address " + startAddress);
+    logVerbose("[MemoryHeap] Freeing allocated memory region at start address " + startAddress);
     const node = this.findMemorySegmentByStartAddress(startAddress)
     if (node === null) {
       throw new RuntimeCILError('[MemoryHeap.free] Unable to free memory: invalid start address ' + startAddress)

@@ -10,7 +10,7 @@ import { CSParseTreeToMetadataError } from '../../CSInterpreterError'
  * @param node The parse tree node that the child node(s) will be iterated.
  * @param callback The callback function that the argument will be the child node that is iterated.
  */
-function iterateParseTreeNodeChildrenAllowNullChildren (node: ParserRuleContext, callback: (c: ParseTree) => boolean): void {
+function iterateParseTreeNodeChildrenAllowNullChildren (node: ParserRuleContext, callback: ((c: ParseTree) => boolean) | ((c: ParseTree, i : number) => boolean)): void {
   // In ANTLR, only the type "ParserRuleContext" has property "children".
   const children = node.children
   if (children === null) {
@@ -21,7 +21,7 @@ function iterateParseTreeNodeChildrenAllowNullChildren (node: ParserRuleContext,
   const childCount = children.length
   for (let i = 0; i < childCount; i++) {
     const child = children[i]
-    const shouldContinueIteration = callback(child)
+    const shouldContinueIteration = callback(child, i)
     if (!shouldContinueIteration) { // When the callback function returns "false", stop iterating.
       log('Iteration interrupted due to stop sign.')
       break
@@ -35,7 +35,7 @@ function iterateParseTreeNodeChildrenAllowNullChildren (node: ParserRuleContext,
  * @param node The parse tree node that the child node(s) will be iterated.
  * @param callback The callback function that the argument will be the child node that is iterated.
  */
-function iterateParseTreeNodeChildren (node: ParserRuleContext, callback: (c: ParseTree) => boolean): void {
+function iterateParseTreeNodeChildren (node: ParserRuleContext, callback: ((c: ParseTree) => boolean) | ((c: ParseTree, i : number) => boolean)): void {
   assertNonNullOrUndefined(node.children)
   iterateParseTreeNodeChildrenAllowNullChildren(node, callback)
 }

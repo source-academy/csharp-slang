@@ -4,6 +4,8 @@ const MemoryHeapModule = require("../../" + TestConstantsModule.BUILD_OUTPUT_DIR
 const ConstantsModule = require("../../" + TestConstantsModule.BUILD_OUTPUT_DIR_RELATED_TO_SRC + '/common/Constants');
 const RuntimeOperandModule = require("../../" + TestConstantsModule.BUILD_OUTPUT_DIR_RELATED_TO_SRC + '/common/runtime/RuntimeOperand');
 
+globalThis.isUnitTest_ObjectHeap = true; // Define this to prevent calling "getCurrentProgram" in "ObjectHeap.dfsReachableObjects"
+
 let testRuntimeContext = null;
 let testObjectHeap = null;
 let object1 = MemoryHeapModule.NULL_POINTER;
@@ -48,10 +50,15 @@ const dummyClassMetadata = {
 }
 
 class CallStackFrameStub {
+	argumentLocals = [];
 	runtimeLocals = [];
-	iterateRuntimeLocals (callbackFunction) {
-      const localCount = this.runtimeLocals.length;
-      for (let i = 0; i < localCount; i++) {
+	iterateLocals (callbackFunction) {
+	  const argumentLocalCount = this.argumentLocals.length;
+      for (let i = 0; i < argumentLocalCount; i++) {
+        callbackFunction(this.argumentLocals[i]);
+      }
+      const runtimeLocalCount = this.runtimeLocals.length;
+      for (let i = 0; i < runtimeLocalCount; i++) {
         callbackFunction(this.runtimeLocals[i]);
       }
     }

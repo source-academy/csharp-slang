@@ -117,10 +117,11 @@ methodParameterName: IDENTIFIER;
 methodParameterModifier: IN | OUT | REF;
 explicitInterfaceDeclaration: typeIdentifier '.';
 // A method definition with explicit interface declaration should not have any modifiers (TODO_INTERPRETER_CHECK)
-methodDefinition: methodModifierList? methodReturnType explicitInterfaceDeclaration? methodName genericTypeParameterList? '(' methodParameterList? ')';
+methodDefinition: methodModifierList? methodReturnType? explicitInterfaceDeclaration? methodName genericTypeParameterList? '(' methodParameterList? ')';
 
-classBodyMethodDefinition: methodDefinition methodBody;
+classBodyMethodDefinition: methodDefinition baseConstructorCall? methodBody;
 methodBody: codeBlock;
+baseConstructorCall: ':' BASE parameterList;
 
 // A method definition within the interface body should not have any modifiers (include like 'public', 'virtual', etc) (TODO_INTERPRETER_CHECK)
 // A method definition within the interface body should not have explicit interface declaration (TODO_INTERPRETER_CHECK)
@@ -210,7 +211,7 @@ statement:
 
 
 variableIdentifier: IDENTIFIER;
-objectReferenceIdentifier: IDENTIFIER | THIS | BASE;
+objectReferenceIdentifier: IDENTIFIER | THIS | BASE | NULL;
 
 
 // Anything that may represent / return an object

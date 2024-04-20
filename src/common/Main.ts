@@ -1,6 +1,7 @@
 import { type CSharpContext, createNewContext } from './CSharpContext'
 import { type CSharpProgram } from './compileTime/CSharpProgram'
 import { assertNonNullOrUndefined } from '../util/Assertion'
+import { type RuntimeContext } from './runtime/RuntimeContext'
 
 let currentContext: CSharpContext
 
@@ -57,4 +58,14 @@ export function addUserCSharpCodePieces (arr: string[][]): void {
 export function getCurrentProgram (): CSharpProgram {
   assertNonNullOrUndefined(currentContext)
   return currentContext.program
+}
+
+export function getCurrentRuntimeContext (): RuntimeContext {
+  assertNonNullOrUndefined(currentContext)
+  return currentContext.runtimeContext
+}
+
+export function getStandardOutput (): string {
+  assertNonNullOrUndefined(currentContext)
+  return currentContext.getStandardOutput()
 }

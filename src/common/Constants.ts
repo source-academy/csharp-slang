@@ -50,3 +50,11 @@ export const INT32_MIN_VALUE = -2147483648
  * 32-bit signed integer's minimum value
  */
 export const INT32_MAX_VALUE = 2147483647
+
+export const CONSTRUCTOR_METHOD_NAME = '.ctor'
+
+export const INSTRUCTIONS_PER_AUTO_GC = 10
+
+export const MAXIMUM_CALL_STACK_SIZE = 1024
+
+export const OUTPUT_CONSOLE_LOGS = true
